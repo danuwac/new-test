@@ -1,31 +1,36 @@
-
 const express = require("express");
-const path = require("path");
 const app = express();
-const sessionRoutes = require("./session");
+const path = require("path");
+const bodyParser = require("body-parser");
+const PORT = process.env.PORT || 5000;
 
-const PORT = process.env.PORT || 3000;
+// Route for session generation
+const codeRoute = require("./pair");
 
-// Serve static HTML files from public directory
-app.use(express.static(path.join(__dirname, "public")));
+require("events").EventEmitter.defaultMaxListeners = 500;
 
-// Mount session generator route
-app.use("/", sessionRoutes);
+// Serve static files like HTML
+app.use(express.static(path.join(__dirname)));
 
-// Fallback to index.html for root
+// Body parser setup
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+
+// Use pair.js as session generator
+app.use("/code", codeRoute);
+
+// HTML pages
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "pair.html"));
 });
 
-// Handle /qr and /pair routes
 app.get("/qr", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "qr.html"));
+  res.sendFile(path.join(__dirname, "qr.html"));
 });
 
-app.get("/pair", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "pair.html"));
-});
-
+// Start server
 app.listen(PORT, () => {
-    console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`🚀 Server running at: http://localhost:${PORT}`);
 });
+
+module.exports = app;
