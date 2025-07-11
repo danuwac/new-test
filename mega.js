@@ -1,7 +1,7 @@
 const mega = require("megajs");
 const auth = {
-  email: "dinithihansika21865@gmail.com",
-  password: "danuka$123",
+  email: "yourownwpbot@gmail.com",
+  password: "yourwpbot@12",
   userAgent:
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/42.0.2311.135 Safari/537.36 Edge/12.246",
 };
