@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QR Code Login</title>
+</head>
+<body>
+  <h1>Scan QR Code to Login</h1>
+  <button onclick="getQR()">Generate QR Code</button>
+  <br><br>
+  <img id="qrImage" style="width: 250px; height: 250px;" />
+
+  <script>
+    async function getQR() {
+      const res = await fetch('/code?method=qr');
+      const data = await res.json();
+      if (data.qr_data_url) {
+        document.getElementById("qrImage").src = data.qr_data_url;
+      } else {
+        alert("Failed to generate QR.");
+      }
+    }
+  </script>
+</body>
+</html>
