@@ -1,17 +1,15 @@
 const express = require("express");
 const fs = require("fs");
-const { exec } = require("child_process");
-let router = express.Router();
 const pino = require("pino");
+const qrcode = require("qrcode");
 const {
   default: makeWASocket,
   useMultiFileAuthState,
-  delay,
   makeCacheableSignalKeyStore,
-  Browsers,
-  jidNormalizedUser,
 } = require("@whiskeysockets/baileys");
 const { upload } = require("./mega");
+
+const router = express.Router();
 
 function removeFile(FilePath) {
   if (!fs.existsSync(FilePath)) return false;
@@ -19,106 +17,70 @@ function removeFile(FilePath) {
 }
 
 router.get("/", async (req, res) => {
-  let num = req.query.number;
-  async function PrabathPair() {
-    const { state, saveCreds } = await useMultiFileAuthState(`./session`);
+  const method = req.query.method || "pair";
+  const sessionID = Date.now().toString();
+  const sessionPath = `./session/${sessionID}`;
+
+  const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+
+  const sock = makeWASocket({
+    auth: {
+      creds: state.creds,
+      keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" })),
+    },
+    printQRInTerminal: false,
+    logger: pino({ level: "fatal" }),
+    browser: ['Chrome (Linux)', '', ''],
+  });
+
+  sock.ev.on("creds.update", saveCreds);
+
+  if (method === "pair") {
     try {
-      let PrabathPairWeb = makeWASocket({
-        auth: {
-          creds: state.creds,
-          keys: makeCacheableSignalKeyStore(
-            state.keys,
-            pino({ level: "fatal" }).child({ level: "fatal" }),
-          ),
-        },
-        printQRInTerminal: false,
-        logger: pino({ level: "fatal" }).child({ level: "fatal" }),
-        browser: Browsers.macOS("Safari"),
-      });
-
-      if (!PrabathPairWeb.authState.creds.registered) {
-        await delay(1500);
-        num = num.replace(/[^0-9]/g, "");
-        const code = await PrabathPairWeb.requestPairingCode(num);
-        if (!res.headersSent) {
-          await res.send({ code });
-        }
-      }
-
-      PrabathPairWeb.ev.on("creds.update", saveCreds);
-      PrabathPairWeb.ev.on("connection.update", async (s) => {
-        const { connection, lastDisconnect } = s;
-        if (connection === "open") {
-          try {
-            await delay(10000);
-            const sessionPrabath = fs.readFileSync("./session/creds.json");
-
-            const auth_path = "./session/";
-            const user_jid = jidNormalizedUser(PrabathPairWeb.user.id);
-
-            function randomMegaId(length = 6, numberLength = 4) {
-              const characters =
-                "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-              let result = "";
-              for (let i = 0; i < length; i++) {
-                result += characters.charAt(
-                  Math.floor(Math.random() * characters.length),
-                );
-              }
-              const number = Math.floor(
-                Math.random() * Math.pow(10, numberLength),
-              );
-              return `${result}${number}`;
-            }
-
-            const mega_url = await upload(
-              fs.createReadStream(auth_path + "creds.json"),
-              `${randomMegaId()}.json`,
-            );
-
-            const string_session = mega_url.replace(
-              "https://mega.nz/file/",
-              "",
-            );
-
-            const sid = string_session;
-
-            const dt = await PrabathPairWeb.sendMessage(user_jid, {
-              text: sid,
-            });
-          } catch (e) {
-            exec("pm2 restart prabath");
-          }
-
-          await delay(100);
-          return await removeFile("./session");
-          process.exit(0);
-        } else if (
-          connection === "close" &&
-          lastDisconnect &&
-          lastDisconnect.error &&
-          lastDisconnect.error.output.statusCode !== 401
-        ) {
-          await delay(10000);
-          PrabathPair();
-        }
+      let jid = await sock.requestPairingCode("94712345678@s.whatsapp.net"); // Replace with dynamic number if needed
+      res.json({
+        type: "pair",
+        pairing_code: jid?.replace("@s.whatsapp.net", ""),
+        session_id: sessionID,
       });
     } catch (err) {
-      exec("pm2 restart prabath-md");
-      console.log("service restarted");
-      PrabathPair();
-      await removeFile("./session");
-      if (!res.headersSent) {
-        await res.send({ code: "Service Unavailable" });
-      }
+      console.log("Pair error:", err);
+      res.status(500).json({ error: "Failed to generate pair code." });
     }
-  }
-  return await PrabathPair();
-});
+  } else if (method === "qr") {
+    let timeout;
+    sock.ev.on("connection.update", async (update) => {
+      const { qr, connection } = update;
 
-process.on("uncaughtException", function (err) {
-  console.log("Caught exception: " + err);
-  exec("pm2 restart prabath");
+      if (qr) {
+        // Return QR as data URL
+        const qrImage = await qrcode.toDataURL(qr);
+        clearTimeout(timeout);
+        res.json({
+          type: "qr",
+          qr_data_url: qrImage,
+          session_id: sessionID,
+        });
+      }
+
+      if (connection === "open") {
+        console.log("✅ QR session connected!");
+      }
+
+      if (connection === "close") {
+        console.log("❌ QR session closed.");
+        clearTimeout(timeout);
+      }
+    });
+
+    // Cleanup if QR not scanned in 90 seconds
+    timeout = setTimeout(() => {
+      removeFile(sessionPath);
+      res.status(408).json({ error: "QR code expired." });
+    }, 90000);
+  } else {
+    res.status(400).json({ error: "Invalid method" });
+  }
 });
 
 module.exports = router;
