@@ -1,0 +1,21 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <title>QR Code Login</title>
+</head>
+<body>
+    <h1>Scan QR Code to Login</h1>
+    <pre id="qr">Loading QR Code...</pre>
+    <script>
+        fetch('/generate?method=qr')
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById("qr").textContent = data.qr || "Failed to load QR";
+            })
+            .catch(() => {
+                document.getElementById("qr").textContent = "Error fetching QR Code.";
+            });
+    </script>
+</body>
+</html>
